@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract NFTMarketDataRepository is Ownable {
+    struct NFTListing {
+        uint256 tokenId;
+        address owner;
+        uint256 price;
+        bool isActive;
+    }
+
+    mapping(uint256 => NFTListing) public nftListings;
+    mapping(uint256 => address) public nftTokenContract;
+    uint256 public totalListings;
+
+    // Events
+    event NFTListed(uint256 indexed tokenId, address indexed owner, uint256 price);
+    event NFTPriceUpdated(uint256 indexed tokenId, uint256 newPrice);
+    event NFTListingRemoved(uint256 indexed tokenId);
+
+    // Add an NFT listing
+    function listNFT(address tokenContract, uint256 tokenId, uint256 price) external {
+        require(IERC721(tokenContract).ownerOf(tokenId) == msg.sender, "Only NFT owner can list");
+
+        nftListings[tokenId] = NFTListing({
+            tokenId: tokenId,
+            owner: msg.sender,
+            price: price,
+            isActive: true
+        });
+
+        nftTokenContract[tokenId] = tokenContract;
+        totalListings++;
+
+        emit NFTListed(tokenId, msg.sender, price);
+    }
+
+    // Update the price of an NFT listing
+    function updatePrice(uint256 tokenId, uint256 newPrice) external {
+        require(nftListings[tokenId].owner == msg.sender, "Only NFT owner can update price");
+        require(nftListings[tokenId].isActive, "NFT listing is not active");
+
+        nftListings[tokenId].price = newPrice;
+
+        emit NFTPriceUpdated(tokenId, newPrice);
+    }
+
+    // Remove an NFT listing
+    function removeListing(uint256 tokenId) external {
+        require(nftListings[tokenId].owner == msg.sender, "Only NFT owner can remove listing");
+        require(nftListings[tokenId].isActive, "NFT listing is not active");
+
+        delete nftListings[tokenId];
+        delete nftTokenContract[tokenId];
+        totalListings--;
+
+        emit NFTListingRemoved(tokenId);
+    }
+
+    // Get NFT details
+    function getNFTDetails(uint256 tokenId) external view returns (address, uint256, uint256, bool) {
+        NFTListing memory listing = nftListings[tokenId];
+        return (listing.owner, listing.price, tokenId, listing.isActive);
+    }
+
+    // Withdraw ETH from the contract (only owner)
+    function withdraw() external onlyOwner {
+        payable(owner()).transfer(address(this).balance);
+    }
+
+    // Receive function to accept ETH payments
+    receive() external payable {}
+}
